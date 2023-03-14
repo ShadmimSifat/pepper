@@ -183,6 +183,7 @@ void RegionalSummaryGenerator::encode_reference_bases(vector< vector<int> >& ima
         for(int i = 1; i <= max_observed_insert[ref_position - ref_start]; i++) {
             base_index = (int) (ref_position - ref_start + cumulative_observed_insert[ref_position - ref_start]) + i;
             // feature_index = get_reference_feature_index('*');
+             cout<<"\t\t\t\t\t\t\t"<<base_index<<endl;
             feature_index = 0;
             value = get_reference_feature_value(reference_sequence[ref_position - ref_start]);
             image_matrix[base_index][feature_index] = value;
@@ -621,7 +622,7 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
                                     AlleleFrequencyMap, AlleleFrequencyMapFwdStrand, AlleleFrequencyMapRevStrand, AlleleMap, read, min_snp_baseq, min_indel_baseq);
         }
     }
-
+  
     vector<long long> filtered_candidate_positions;
     bool snp_threshold_pass[ref_end - ref_start + 1];
     bool insert_threshold_pass[ref_end - ref_start + 1];
@@ -635,14 +636,17 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
         double snp_fraction = snp_count[positions[i]-ref_start] / max(1.0, (double) coverage_vector[positions[i]-ref_start]);
         double insert_fraction = insert_count[positions[i]-ref_start] / max(1.0, (double) coverage_vector[positions[i]-ref_start]);
         double delete_fraction = delete_count[positions[i]-ref_start] / max(1.0, (double) coverage_vector[positions[i]-ref_start]);
-
+        // cout<<"snp_frac: "<<snp_fraction<<" insert_frac "<<insert_fraction<<" delete_frac: "<<delete_fraction<<endl;
+        // cout<<"snp_freq_t: "<<snp_freq_threshold<<" insert_freq_t: "<<insert_freq_threshold<<" delete_freq_t: "<<delete_freq_threshold<<endl;	
         if(snp_fraction >= snp_freq_threshold || insert_fraction >= insert_freq_threshold || delete_fraction >= delete_freq_threshold) {
-            if(positions[i] >= candidate_region_start && positions[i] <= candidate_region_end && coverage_vector[positions[i]-ref_start] >= min_coverage_threshold) {
+            // cout<<"\t\t\t\t\t aschilam ekahne 1...\n";
+        
+            // if(positions[i] >= candidate_region_start && positions[i] <= candidate_region_end && coverage_vector[positions[i]-ref_start] >= min_coverage_threshold) {
                 filtered_candidate_positions.push_back(positions[i]);
                 if(snp_fraction >= snp_freq_threshold) snp_threshold_pass[positions[i] - ref_start] = true;
                 if(insert_fraction >= insert_freq_threshold) insert_threshold_pass[positions[i] - ref_start] = true;
                 if(delete_fraction >= delete_freq_threshold) delete_threshold_pass[positions[i] - ref_start] = true;
-            }
+            // }
         }
 
         for(int j=ImageOptionsRegion::BASE_INDEX_START; j < ImageOptionsRegion::BASE_INDEX_START + ImageOptionsRegion::BASE_INDEX_SIZE ; j++){
@@ -667,16 +671,18 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
     vector<CandidateImageSummary> all_candidate_images;
     // at this point all of the images are generated. So we can create the images for each candidate position.
     for(long long candidate_position : filtered_candidate_positions) {
+        // cout<<"\tCANDIDATE POSITION : "<<candidate_position<<endl;
         for (auto it=AlleleMap[candidate_position - ref_start].begin(); it!=AlleleMap[candidate_position - ref_start].end(); ++it) {
             CandidateImageSummary candidate_summary;
             candidate_summary.contig = contig;
             candidate_summary.position = candidate_position;
-            bool debug = false;
+            bool debug = 0;
             if(debug) {
-                cout << "-------------------------START----------------------------------------" << endl;
-                cout << "Candidate position: " << candidate_position << endl;
-                cout << "Coverage: " << coverage_vector[candidate_position - ref_start] << endl;
-                cout << "Candidates: " << endl;
+                // cout << "-------------------------START----------------------------------------" << endl;
+                cout << "Candidate position 1: " << candidate_position << endl;
+                // cout << "Coverage: " << coverage_vector[candidate_position - ref_start] << endl;
+                // cout << "Candidates: " << endl;
+                debug = 0;
             }
 
             candidate_summary.depth = min(coverage_vector[candidate_position-ref_start], ImageOptionsRegion::MAX_COLOR_VALUE);
@@ -690,6 +696,7 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
 //            cout<<candidate_string<<" "<<allele_depth<<" "<<candidate_frequency<<endl;
             string candidate_allele = candidate_string.substr(1, candidate_string.length());
             // minimum 2 reads supporting the candidate or frequency is lower than 10
+            
             if (allele_depth < candidate_support_threshold) {
                 continue;
             }
@@ -710,12 +717,28 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
                (candidate_string[0] == '3' && !delete_threshold_pass[candidate_position - ref_start])) {
                 continue;
             }
-
+            
             int base_index = (int) (candidate_position - ref_start + cumulative_observed_insert[candidate_position - ref_start]);
-            if(debug) {
-                cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
+            int sifat_debug = 0;
+            if(sifat_debug) {
+                if (candidate_string[0]=='3')
+                {
+                // cout<<"ref start: "<<ref_start<<" ref end: "<<ref_end<<endl;
+                // cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
                 cout<<"CANDIDATE TYPE: "<<candidate_string[0]<<endl;
-                cout<<"REF BASE: "<<reference_sequence[candidate_position - ref_start]<<endl;
+                // cout<<"REF BASE: "<<reference_sequence[candidate_position - ref_start]<<endl;
+                cout<<"candidate_position : "<<candidate_position<<endl;
+                }
+                else {
+
+                // cout<<"\t\rref start: "<<ref_start<<" ref end: "<<ref_end<<endl;
+                // cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
+                cout<<"\t\tCANDIDATE TYPE: "<<candidate_string[0]<<endl;
+            
+                cout<<"\t\tcandidate_position : "<<candidate_position<<endl;
+
+                }
+                
             }
             char ref_base = reference_sequence[candidate_position - ref_start];
             if (train_mode) {
@@ -816,19 +839,27 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
 
                 candidate_summary.base_label = labels[base_index];
                 candidate_summary.type_label = gt_label;
+                
                 if(debug) {
                     cout << "BASE LABEL: " <<int(candidate_summary.base_label)<<endl;
                     cout << "TYPE LABEL: " <<int(candidate_summary.type_label)<<endl;
+                    
                 }
             } else {
                 candidate_summary.base_label = 0;
                 candidate_summary.type_label = 0;
             }
-
+            
             int base_left = base_index - candidate_window_size / 2;
             int base_right = base_index + candidate_window_size / 2;
-
+            // if(sifat_debug)
+            //     cout<<"base left: "<<base_left<<" base right: "<<base_right<<" base_index: "<<base_index<<endl;
+            // cout<<"--------------------------------------------------\n";
             candidate_summary.image_matrix.resize(candidate_window_size + 1, vector<int>(feature_size));
+            // cout<<">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\t"<<endl;
+
+            // cout << "FEATURE SIZE = " << image_matrix.size() << "----------------------------------------------------------\n\n";
+
             // now copy the entire feature matrix
             for (int i = base_left; i <= base_right; i++) {
                 for (int j = 0; j < feature_size; j++) {
@@ -956,9 +987,9 @@ void RegionalSummaryGenerator::debug_print_matrix(vector<vector<int> > image_mat
     cout << endl;
 
     cout<<"POS:\t";
-    for(int i=0; i < positions.size(); i++ ) {
-        printf("%3lld\t", positions[i] % 100);
-    }
+    // for(int i=0; i < positions.size(); i++ ) {
+    //     printf("%3lld\t", positions[i] % 100);
+    // }
     cout << endl;
     int image_size = ImageOptionsRegion::REFERENCE_INDEX_SIZE + ImageOptionsRegion::SUPPORT_INDEX_SIZE + ImageOptionsRegion::BASE_INDEX_SIZE;
     for (int i = 0; i < image_size; i++) {
