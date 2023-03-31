@@ -183,7 +183,7 @@ void RegionalSummaryGenerator::encode_reference_bases(vector< vector<int> >& ima
         for(int i = 1; i <= max_observed_insert[ref_position - ref_start]; i++) {
             base_index = (int) (ref_position - ref_start + cumulative_observed_insert[ref_position - ref_start]) + i;
             // feature_index = get_reference_feature_index('*');
-             cout<<"\t\t\t\t\t\t\t"<<base_index<<endl;
+            cout<<"\t\t\t\t\t\t\t"<<base_index<<endl;
             feature_index = 0;
             value = get_reference_feature_value(reference_sequence[ref_position - ref_start]);
             image_matrix[base_index][feature_index] = value;
@@ -459,7 +459,10 @@ void RegionalSummaryGenerator::populate_summary_matrix(vector< vector<int> >& im
                     string candidate_string = char(AlleleType::INSERT_ALLELE + '0') + alt;
 
                     // only process candidates that are smaller than 50bp as they 50bp+ means SV
-                    if(candidate_string.length() <= 61 && base_quality >= min_indel_baseq * len) {
+                    // Shadmim et al: Here's a condition that's causing you lose SV candidates
+                    // I am going to change you and set to >=20, that way you will only pick up candidates
+                    // that are >=20bp, so the code will only work for SVs.
+                    if(candidate_string.length() >= 20) {
                         if(insert_count_index >= 0) image_matrix[base_index][insert_count_index] -= 1;
 
                         insert_count[ref_position - 1 - ref_start] += 1;
@@ -507,9 +510,12 @@ void RegionalSummaryGenerator::populate_summary_matrix(vector< vector<int> >& im
                     base_quality = read.base_qualities[read_index];
                     string candidate_string = char(AlleleType::DELETE_ALLELE + '0') + ref;
 
-                    // only process candidates that are smaller than 50bp as they 50bp+ means SV
+                    // Shadmim et al: Here's a condition that's causing you lose SV candidates
+                    // I am going to change you and set to >=20, that way you will only pick up candidates
+                    // that are >=20bp, so the code will only work for SVs.
                     // no base-quality check for deletes
-                    if(candidate_string.length() <= 61) {
+                    // Consult the truth set to see what value should be best for this and the other one, I think 50bp makes sense, but you can change it as you see fit.
+                    if(candidate_string.length() >= 20) {
                         delete_count[ref_position - 1 - ref_start] += 1;
                         int region_index = (int) (ref_position - 1 - ref_start);
 
@@ -622,7 +628,8 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
                                     AlleleFrequencyMap, AlleleFrequencyMapFwdStrand, AlleleFrequencyMapRevStrand, AlleleMap, read, min_snp_baseq, min_indel_baseq);
         }
     }
-  
+
+    // This is where candidates are pruned and they are not generated based on their position
     vector<long long> filtered_candidate_positions;
     bool snp_threshold_pass[ref_end - ref_start + 1];
     bool insert_threshold_pass[ref_end - ref_start + 1];
@@ -636,17 +643,15 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
         double snp_fraction = snp_count[positions[i]-ref_start] / max(1.0, (double) coverage_vector[positions[i]-ref_start]);
         double insert_fraction = insert_count[positions[i]-ref_start] / max(1.0, (double) coverage_vector[positions[i]-ref_start]);
         double delete_fraction = delete_count[positions[i]-ref_start] / max(1.0, (double) coverage_vector[positions[i]-ref_start]);
-        // cout<<"snp_frac: "<<snp_fraction<<" insert_frac "<<insert_fraction<<" delete_frac: "<<delete_fraction<<endl;
-        // cout<<"snp_freq_t: "<<snp_freq_threshold<<" insert_freq_t: "<<insert_freq_threshold<<" delete_freq_t: "<<delete_freq_threshold<<endl;	
-        if(snp_fraction >= snp_freq_threshold || insert_fraction >= insert_freq_threshold || delete_fraction >= delete_freq_threshold) {
-            // cout<<"\t\t\t\t\t aschilam ekahne 1...\n";
-        
-            // if(positions[i] >= candidate_region_start && positions[i] <= candidate_region_end && coverage_vector[positions[i]-ref_start] >= min_coverage_threshold) {
-                filtered_candidate_positions.push_back(positions[i]);
-                if(snp_fraction >= snp_freq_threshold) snp_threshold_pass[positions[i] - ref_start] = true;
-                if(insert_fraction >= insert_freq_threshold) insert_threshold_pass[positions[i] - ref_start] = true;
-                if(delete_fraction >= delete_freq_threshold) delete_threshold_pass[positions[i] - ref_start] = true;
-            // }
+//        cout<<"Position: "<<positions[i]<<endl;
+//        cout<<"snp_frac: "<<snp_fraction<<" insert_frac "<<insert_fraction<<" delete_frac: "<<delete_fraction<<endl;
+//        cout<<"snp_freq_t: "<<snp_freq_threshold<<" insert_freq_t: "<<insert_freq_threshold<<" delete_freq_t: "<<delete_freq_threshold<<endl;
+
+        // We don't want to generate SNP candidates as this is SV-only mode, so I will stop checking for SNPs and will only check for INSERT or DELETE
+        if(insert_fraction >= insert_freq_threshold || delete_fraction >= delete_freq_threshold) {
+            filtered_candidate_positions.push_back(positions[i]);
+            if(insert_fraction >= insert_freq_threshold) insert_threshold_pass[positions[i] - ref_start] = true;
+            if(delete_fraction >= delete_freq_threshold) delete_threshold_pass[positions[i] - ref_start] = true;
         }
 
         for(int j=ImageOptionsRegion::BASE_INDEX_START; j < ImageOptionsRegion::BASE_INDEX_START + ImageOptionsRegion::BASE_INDEX_SIZE ; j++){
@@ -676,13 +681,13 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
             CandidateImageSummary candidate_summary;
             candidate_summary.contig = contig;
             candidate_summary.position = candidate_position;
+            // setting debug=1 will print the summaries
             bool debug = 0;
             if(debug) {
-                // cout << "-------------------------START----------------------------------------" << endl;
+                cout << "-------------------------START----------------------------------------" << endl;
                 cout << "Candidate position 1: " << candidate_position << endl;
-                // cout << "Coverage: " << coverage_vector[candidate_position - ref_start] << endl;
-                // cout << "Candidates: " << endl;
-                debug = 0;
+                cout << "Coverage: " << coverage_vector[candidate_position - ref_start] << endl;
+                cout << "Candidates: " << endl;
             }
 
             candidate_summary.depth = min(coverage_vector[candidate_position-ref_start], ImageOptionsRegion::MAX_COLOR_VALUE);
@@ -696,7 +701,7 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
 //            cout<<candidate_string<<" "<<allele_depth<<" "<<candidate_frequency<<endl;
             string candidate_allele = candidate_string.substr(1, candidate_string.length());
             // minimum 2 reads supporting the candidate or frequency is lower than 10
-            
+
             if (allele_depth < candidate_support_threshold) {
                 continue;
             }
@@ -717,28 +722,28 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
                (candidate_string[0] == '3' && !delete_threshold_pass[candidate_position - ref_start])) {
                 continue;
             }
-            
+
             int base_index = (int) (candidate_position - ref_start + cumulative_observed_insert[candidate_position - ref_start]);
             int sifat_debug = 0;
             if(sifat_debug) {
                 if (candidate_string[0]=='3')
                 {
-                // cout<<"ref start: "<<ref_start<<" ref end: "<<ref_end<<endl;
-                // cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
-                cout<<"CANDIDATE TYPE: "<<candidate_string[0]<<endl;
-                // cout<<"REF BASE: "<<reference_sequence[candidate_position - ref_start]<<endl;
-                cout<<"candidate_position : "<<candidate_position<<endl;
+                    // cout<<"ref start: "<<ref_start<<" ref end: "<<ref_end<<endl;
+                    // cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
+                    cout<<"CANDIDATE TYPE: "<<candidate_string[0]<<endl;
+                    // cout<<"REF BASE: "<<reference_sequence[candidate_position - ref_start]<<endl;
+                    cout<<"candidate_position : "<<candidate_position<<endl;
                 }
                 else {
 
-                // cout<<"\t\rref start: "<<ref_start<<" ref end: "<<ref_end<<endl;
-                // cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
-                cout<<"\t\tCANDIDATE TYPE: "<<candidate_string[0]<<endl;
-            
-                cout<<"\t\tcandidate_position : "<<candidate_position<<endl;
+                    // cout<<"\t\rref start: "<<ref_start<<" ref end: "<<ref_end<<endl;
+                    // cout<<"CANDIDATE ALLELE SELECTED: "<<candidate_allele<<endl;
+                    cout<<"\t\tCANDIDATE TYPE: "<<candidate_string[0]<<endl;
+
+                    cout<<"\t\tcandidate_position : "<<candidate_position<<endl;
 
                 }
-                
+
             }
             char ref_base = reference_sequence[candidate_position - ref_start];
             if (train_mode) {
@@ -839,17 +844,17 @@ vector<CandidateImageSummary> RegionalSummaryGenerator::generate_summary(vector 
 
                 candidate_summary.base_label = labels[base_index];
                 candidate_summary.type_label = gt_label;
-                
+
                 if(debug) {
                     cout << "BASE LABEL: " <<int(candidate_summary.base_label)<<endl;
                     cout << "TYPE LABEL: " <<int(candidate_summary.type_label)<<endl;
-                    
+
                 }
             } else {
                 candidate_summary.base_label = 0;
                 candidate_summary.type_label = 0;
             }
-            
+
             int base_left = base_index - candidate_window_size / 2;
             int base_right = base_index + candidate_window_size / 2;
             // if(sifat_debug)

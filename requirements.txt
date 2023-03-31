@@ -2,7 +2,7 @@ h5py==2.10.0
 numpy==1.22.0
 torch==1.10.0
 wget
-torchvision
+torchvision==0.11.0
 onnx
 onnxruntime
 hyperopt==0.2
