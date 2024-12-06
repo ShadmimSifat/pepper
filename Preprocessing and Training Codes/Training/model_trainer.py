@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.nn import Module
 from torch import nn
 
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, classification_report
 from sklearn.model_selection import train_test_split
 
 """	
@@ -277,45 +277,57 @@ def print_scores(y_true, y_pred):
     print("\t\t  f1 score : {:.3f}".format(f1_score(y_true, y_pred,average='macro')))
     print("\t\t  precision: {:.3f}".format(precision_score(y_true, y_pred)))
     print("\t\t  recall   : {:.3f}".format(recall_score(y_true, y_pred)))
-       
+    print(classification_report(y_true, y_pred))
+    
 
 if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     batch_size = 512
-    all_epoch = 64
-    neg_sample_size = 20000
+    all_epoch = 200
+    threshold_sample_size = 19700
 
-    pos_file = 'positive.npz'
-    neg_file = 'negative.npz'
+    in_file = 'in1.npz'
+    del_file = 'del1.npz'
+    nonIndel_file = 'nonIndel.npz'
 
-    print("pos data shape: {}".format(np.load(pos_file)['data'].shape))
-    # print("pos label shape: {}".format(np.load(pos_file)['label'].shape))
-    print("neg data shape: {}".format(np.load(neg_file)['data'].shape))
-    # print("neg label shape: {}".format(np.load(neg_file)['label'].shape))
-
-
-    pos_data , pos_label = np.load(pos_file)['data'], np.load(pos_file)['label']
-    neg_data , neg_label = np.load(neg_file)['data'], np.load(neg_file)['label']
-
-    truncated_neg_data, truncated_neg_label = randomnly_select_n_images(neg_data,neg_label,neg_sample_size)
-    neg_data, neg_label = truncated_neg_data, truncated_neg_label
-
-    print("Truncated neg data shape: {}".format(neg_data.shape))
-
-    pos_data = convert_nxn(pos_data)
-    neg_data = convert_nxn(neg_data)
-
-    fuLL_data, fuLL_label = data_merger(pos_data,pos_label,neg_data,neg_label)
-    fuLL_data, fuLL_label = shuffler(fuLL_data,fuLL_label)
-
-    print("fuLL_data shape: {}".format(fuLL_data.shape))
+    print("in data shape: {}".format(np.load(in_file)['data'].shape))
+    print("del data shape: {}".format(np.load(del_file)['data'].shape))
+    print("nonIndel data shape: {}".format(np.load(nonIndel_file)['data'].shape))
 
 
+    in_data , in_label = np.load(in_file)['data'], np.load(in_file)['label']
+    del_data , del_label = np.load(del_file)['data'], np.load(del_file)['label']
+    nonIndel_data , nonIndel_label = np.load(nonIndel_file)['data'], np.load(nonIndel_file)['label']
 
-    train_percent = 0.65
+    truncated_in_data, truncated_in_label = randomnly_select_n_images(in_data,in_label,threshold_sample_size + 11300)
+    in_data, in_label = truncated_in_data, truncated_in_label
+    
+    # truncated_del_data, truncated_del_label = randomnly_select_n_images(del_data,del_label,threshold_sample_size + 3000)
+    # del_data, del_label = truncated_del_data, truncated_del_label
+
+    truncated_nonIndel_data, truncated_nonIndel_label = randomnly_select_n_images(nonIndel_data,nonIndel_label,threshold_sample_size)
+    nonIndel_data, nonIndel_label = truncated_nonIndel_data, truncated_nonIndel_label
+
+    print("Truncated In data shape: {}".format(in_data.shape))
+    print("Truncated del data shape: {}".format(del_data.shape))
+    print("Truncated nonIndel data shape: {}".format(nonIndel_data.shape))
+
+    in_data = convert_nxn(in_data)
+    del_data = convert_nxn(del_data)
+    nonIndel_data = convert_nxn(nonIndel_data)
+
+    indel_data, indel_label = data_merger(in_data,in_label,del_data,del_label)
+    full_data, full_label = data_merger(indel_data,indel_label,nonIndel_data,nonIndel_label)
+    full_data, full_label = shuffler(full_data, full_label)
+
+    print("full_data shape: {}".format(full_data.shape))
+
+
+
+    train_percent = 0.75
     valid_percent = 0.15
 
-    train_data,train_label,test_data,test_label,validation_data,validation_label = train_test_data_splitter(fuLL_data,fuLL_label,train_percent,valid_percent)
+    train_data,train_label,test_data,test_label,validation_data,validation_label = train_test_data_splitter(full_data, full_label ,train_percent,valid_percent)
 
   
     train_dataset = torch.utils.data.TensorDataset(torch.from_numpy(train_data), torch.from_numpy(train_label))
@@ -339,7 +351,7 @@ if __name__ == '__main__':
     
     print("=========================================")
     
-    num_classes = 2
+    num_classes = 3 # 0 for nonIndel , 1 for Insertion and 2 for Deletion
 
     model = Model(num_classes).to(device)
     sgd = SGD(model.parameters(), lr=1e-1)
